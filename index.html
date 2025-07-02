@@ -2,128 +2,118 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Plant Health Checker</title>
+  <title>🌱 Plant Doctor - Teachable Machine Classifier</title>
+  <link href="https://fonts.googleapis.com/css2?family=Comic+Neue&display=swap" rel="stylesheet">
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Comic Neue', cursive;
       text-align: center;
-      background-color: #dbeeff; /* mild blue background */
-      color: #000;
       padding: 20px;
+      background: linear-gradient(to right, #a1c4fd, #c2e9fb);
+      color: #333;
     }
 
     h1 {
-      font-size: 2.5em;
-      color: red; /* red heading */
+      color: #4b0082;
+      text-shadow: 2px 2px #dcdcdc;
     }
 
-    #image-preview {
-      margin: 20px auto;
-      width: 250px;
-      height: 250px;
-      object-fit: cover;
-      border: 2px solid #2196f3;
-      border-radius: 10px;
-    }
-
-    #label-container {
+    input[type="file"] {
       margin-top: 20px;
-      font-size: 1.2em;
-      color: #0d47a1;
-    }
-
-    input[type="file"], button {
-      margin-top: 15px;
-      padding: 10px 20px;
-      font-size: 16px;
-      border-radius: 6px;
-      border: none;
+      padding: 12px;
+      background-color: #fff176;
+      border: 2px dashed #fbc02d;
+      border-radius: 10px;
       cursor: pointer;
     }
 
-    button {
-      background-color: #42a5f5;
-      color: white;
+    #preview {
+      margin-top: 20px;
+      width: 224px;
+      height: auto;
+      border: 2px solid #333;
+      border-radius: 10px;
     }
 
-    .result-box {
-      margin: 10px auto;
-      padding: 10px;
-      width: 300px;
-      background-color: #e3f2fd;
-      border: 1px solid #90caf9;
-      border-radius: 8px;
+    #label-container div {
+      margin-top: 10px;
+      font-size: 20px;
+      font-weight: bold;
     }
+
+    .result-green { color: green; }
+    .result-orange { color: orange; }
+    .result-red { color: red; }
   </style>
 </head>
 <body>
-  <h1>🌿 Plant Health Checker 🌿</h1>
+
+  <img src="https://img.icons8.com/color/96/plant-under-sun--v2.png" alt="Plant Icon" />
+  <h1>🌿 Plant Health Classifier</h1>
+  <p>Upload a picture of a leaf to predict if it's healthy!</p>
 
   <input type="file" id="imageUpload" accept="image/*"><br>
-  <img id="image-preview" src="" alt="Preview"><br>
-  <button onclick="predict()">Predict</button>
+  <img id="preview" alt="Image preview" />
   <div id="label-container"></div>
 
-  <!-- TensorFlow and Teachable Machine -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image"></script>
+  <!-- TensorFlow and Teachable Machine Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
-  <script>
-    const URL = "https://abinaya469.github.io/finalised/my_model/"; // Folder that contains model.json, metadata.json, weights.bin
-    let model;
-    let image = new Image();
-    let isModelReady = false;
+  <script type="text/javascript">
+    const URL = "./my_model/";
+    let model, labelContainer, maxPredictions;
 
-    // Load the model when page loads
-    window.onload = async () => {
+    async function loadModel() {
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
+
       try {
-        model = await tmImage.load(URL + "model.json", URL + "metadata.json");
-        isModelReady = true;
-        console.log("✅ Model loaded");
-      } catch (err) {
-        console.error("❌ Failed to load model:", err);
-        alert("Model failed to load. Check console or file paths.");
-      }
-    };
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
 
-    // Handle file upload
-    document.getElementById('imageUpload').addEventListener('change', event => {
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < maxPredictions; i++) {
+          labelContainer.appendChild(document.createElement("div"));
+        }
+
+        console.log("✅ Model loaded successfully.");
+      } catch (err) {
+        console.error("❌ Error loading model:", err);
+        alert("Model failed to load.");
+      }
+    }
+
+    // When user uploads an image
+    document.getElementById("imageUpload").addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = e => {
-        image.src = e.target.result;
-        image.onload = () => {
-          document.getElementById('image-preview').src = image.src;
-        };
+      const img = document.getElementById("preview");
+      img.src = URL.createObjectURL(file);
+
+      img.onload = async () => {
+        if (!model) {
+          await loadModel();
+        }
+
+        const prediction = await model.predict(img);
+        for (let i = 0; i < maxPredictions; i++) {
+          const prob = prediction[i].probability;
+          const className = prediction[i].className;
+          const percent = (prob * 100).toFixed(2);
+
+          const resultClass =
+            prob > 0.8 ? "result-green" :
+            prob > 0.5 ? "result-orange" : "result-red";
+
+          const labelDiv = labelContainer.childNodes[i];
+          labelDiv.innerHTML = `${className}: ${percent}%`;
+          labelDiv.className = resultClass;
+        }
       };
-      reader.readAsDataURL(file);
     });
-
-    // Predict
-    async function predict() {
-      if (!isModelReady) {
-        alert("Please wait, model is still loading.");
-        return;
-      }
-
-      if (!image.src) {
-        alert("Please upload an image first.");
-        return;
-      }
-
-      const prediction = await model.predict(image);
-      const container = document.getElementById("label-container");
-      container.innerHTML = ""; // Clear previous results
-
-      prediction.forEach(p => {
-        const div = document.createElement("div");
-        div.className = "result-box";
-        div.textContent = `${p.className}: ${(p.probability * 100).toFixed(2)}%`;
-        container.appendChild(div);
-      });
-    }
   </script>
 </body>
 </html>
